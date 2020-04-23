@@ -1,0 +1,351 @@
+Option Compare Database
+
+Private Declare Function apiGetUserName Lib "advapi32.dll" _
+    Alias "GetUserNameA" (ByVal lpBuffer As String, _
+    nSize As Long) As Long
+
+Public par As Integer
+Public Const conMAX As Integer = 20
+Public strFirst() As String
+Public lngAnzGruppen As Long
+Public fDone As Boolean
+Public OriginalSuchstr
+Public Suchstr
+Public SuchfeldName As ComboBox
+
+Dim indexwert
+Dim Databnme As String 'Beinhaltet den Namen der Datenbank
+Dim DatTables As String 'Beinhaltet die aufzulistenden Tabellen
+Dim KritTab As String   'Beinhaltet die Hauptsuchtabelle
+Dim EinDeutWert As String ' Eindeutiger Wert als Suchtabelle
+Dim KommaCount As Integer  'Kommastelle für Kombofeld
+Dim SortFolge As String    'Einträge sortiert nach
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Function fOSUserName() As String
+On Error GoTo Err_Hanndler
+
+      Dim lngLen As Long, lngX As Long
+      Dim strUserName As String
+          
+20    strUserName = String$(254, 0)
+30    lngLen = 255
+40    lngX = apiGetUserName(strUserName, lngLen)
+
+50    If lngX <> 0 Then
+60        fOSUserName = Left$(strUserName, lngLen - 1)
+70    Else
+80        fOSUserName = ""
+90    End If
+
+Exit_Handler:
+100       Exit Function
+          
+Err_Hanndler:
+110       Resume Next
+
+End Function
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Public Function WildcardsACC2SQL(ByVal strSQL As String) As String
+On Error GoTo Err_Hanndler
+    
+    Dim intPos As Integer
+    intPos = InStr(1, strSQL, "*")
+    Do While intPos <> 0
+        intPos = intPos + 1
+        strSQL = Left(strSQL, intPos - 2) & "%" & Mid(strSQL, intPos)
+        intPos = InStr(intPos, strSQL, "*")
+    Loop
+    intPos = InStr(1, strSQL, "?")
+    Do While intPos <> 0
+        intPos = intPos + 1
+        strSQL = Left(strSQL, intPos - 2) & "_" & Mid(strSQL, intPos)
+        intPos = InStr(intPos, strSQL, "?")
+    Loop
+    intPos = InStr(1, strSQL, "[!")
+    Do While intPos <> 0
+        intPos = intPos + 1
+        strSQL = Left(strSQL, intPos - 2) & "[^" & Mid(strSQL, intPos + 1)
+        intPos = InStr(intPos, strSQL, "[!")
+    Loop
+    WildcardsACC2SQL = strSQL
+    
+Exit_Handler:
+    Exit Function
+    
+Err_Hanndler:
+    Resume Next
+
+End Function
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Public Function KeyDSuch(press As Integer, ByVal KomboName As ComboBox)
+On Error GoTo Err_Hanndler
+
+    Dim Kombofeld As ComboBox
+    Set Kombofeld = KomboName
+    Dim rst As New ADODB.Recordset
+    Dim strSQL As String
+    Dim lngAnzahl As Long
+    If press = 42 Then
+        Kombofeld.AfterUpdate = "=CancelUpdate()"
+        Kombofeld.Text = Kombofeld.Text & "*"
+        Kombofeld.SetFocus
+        Suchstr = Kombofeld.Text
+        OriginalSuchstr = Suchstr
+        strSQL = "SELECT Top " & CStr(conMAX) _
+            & DatTables _
+            & " FROM " & Databnme _
+            & " WHERE " & KritTab & " LIKE '" & WildcardsACC2SQL(Kombofeld.Text) & "' " _
+            & "ORDER BY " & SortFolge
+        Kombofeld.RowSource = strSQL
+        Kombofeld.Value = ""
+        If Kombofeld.ListCount > 0 Then    'Es wurden Datensätze gefunden
+            Kombofeld.TabStop = True
+            lngAnzGruppen = 1
+            ReDim Preserve strFirst(1 To 1)
+            If Kombofeld.Column(0, 1) <> Null Then
+                strFirst(1) = Kombofeld.Column(0, 1)
+            End If
+        Else                                'Es wurden keine Datensätze gefunden
+            MsgBox "Aufgrund Ihrer Eingabe wurde kein Datensatz gefunden.", vbInformation
+            Kombofeld.RowSource = ""
+            Kombofeld.TabStop = False
+        End If
+    End If
+
+Exit_Handler:
+    Exit Function
+    
+Err_Hanndler:
+    Resume Next
+
+End Function
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Public Function Indauschluss(ByVal KomboName As ComboBox) As String
+On Error GoTo Err_Hanndler
+
+    Dim Kombofeld As ComboBox
+    Set Kombofeld = KomboName
+    Dim t As Integer
+    If Kombofeld.ColumnHeads = False Then
+        For t = 0 To Kombofeld.ListCount - 1
+            Indauschluss = Indauschluss & "AND " & EinDeutWert & " <> '" & Kombofeld.Column(KommaCount, t) & "' "
+        Next t
+    End If
+    If Kombofeld.ColumnHeads = True Then
+        For t = 1 To Kombofeld.ListCount - 1
+            Indauschluss = Indauschluss & "AND " & EinDeutWert & " <> '" & Kombofeld.Column(KommaCount, t) & "' "
+        Next t
+    End If
+
+Exit_Handler:
+    Exit Function
+    
+Err_Hanndler:
+    Resume Next
+
+End Function
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Public Sub SuchWeiter(press As Integer, ByVal KomboName As ComboBox)
+On Error GoTo ende2
+
+    Dim Kombofeld As ComboBox
+    Set Kombofeld = KomboName
+    Dim strSQL As String
+    Dim intAnzInListe As Integer
+    If press = 40 Then
+        If Kombofeld.ColumnHeads = False Then  ' Für eingeschaltete Listboxüberschrift
+           intAnzInListe = CInt(Kombofeld.ListCount)
+        Else
+            intAnzInListe = CInt(Kombofeld.ListCount) - 1
+        End If
+        If intAnzInListe < conMAX Then  'letzte Gruppe erreicht
+            MsgBox "Es sind keine weiteren Daten vorhanden.", vbInformation
+        Else
+            Kombofeld.AfterUpdate = "=CancelUpdate()"
+            strSQL = "SELECT Top " & CStr(conMAX) & " " _
+                & DatTables _
+                & " FROM " & Databnme _
+                & " WHERE " & KritTab & " LIKE '" & WildcardsACC2SQL(OriginalSuchstr) & "' " _
+                & "AND " & KritTab & " >= '" & Kombofeld.Column(0, intAnzInListe - 1) & "' " _
+                & Indauschluss(Kombofeld) _
+                & " ORDER BY " & SortFolge
+            Kombofeld.RowSource = strSQL
+            ' STR Kombofeld.Value.lngAnzGruppen = lngAnzGruppen + 1
+            ReDim Preserve strFirst(1 To lngAnzGruppen)
+            If Kombofeld.ColumnHeads = False Then
+                strFirst(lngAnzGruppen) = Kombofeld.Column(0, 1)
+            Else
+                strFirst(lngAnzGruppen) = Kombofeld.Column(0, 1)
+            End If
+            indexwert = Kombofeld.Column(KommaCount, 1)
+        End If
+        Kombofeld.Dropdown
+    ElseIf press = 38 Then
+        If lngAnzGruppen <= 1 Then
+            Kombofeld.AfterUpdate = "=CancelUpdate()"
+            MsgBox "Anfang der Liste erreicht.", vbInformation
+        Else
+            Kombofeld.AfterUpdate = "=CancelUpdate()"
+            lngAnzGruppen = lngAnzGruppen - 1
+            strSQL = "SELECT Top " & CStr(conMAX) & " " _
+                & DatTables _
+                & " FROM " & Databnme _
+                & " WHERE " & KritTab & " LIKE '" & WildcardsACC2SQL(OriginalSuchstr) & "' " _
+                & "AND " & KritTab & " >= '" & strFirst(lngAnzGruppen) & "' " _
+                & "ORDER BY " & SortFolge
+            Kombofeld.RowSource = strSQL
+            Kombofeld.Value = ""
+        End If
+        If Kombofeld.ListCount > 1 Then    ' Für eingeschaltete Listboxüberschrift
+            If Kombofeld.ColumnHeads = False Then
+                Kombofeld.ListIndex = Kombofeld.ListCount - 1
+            Else
+                Kombofeld.ListIndex = Kombofeld.ListCount - 2
+            End If
+        End If
+        Kombofeld.Dropdown
+    End If
+ 
+    Exit Sub
+
+ende2:
+    MsgBox "Es sind keine weiteren Daten vorhanden.", vbInformation
+
+Exit_Handler:
+    Exit Sub
+    
+Err_Hanndler:
+    Resume Next
+
+End Sub
+
+' ******************************************************************
+' ** File:  it_Click
+' ** Name:  N/A
+' ** Desc:  N/A
+' ** Auth:  N/A
+' ** Date:  N/A
+' ******************************************************************
+' ** Change History
+' ******************************************************************
+' ** PR   Date        Author    Description
+' ** --   --------    -------   ------------------------------------
+' ** 1    01/01/1900  NA        Init Version
+' ** 2    29/02/2020  TRO       Code Cleaning and analyseis
+' ******************************************************************
+Public Function SuchAufruf(KeyCode As Integer, Shift As Integer, Datenbank As String, Liste As String, krit As String, EinDeut As String, Sorto As String)
+On Error GoTo Err_Hanndler
+
+    Databnme = Datenbank
+    DatTables = Liste
+    DatTables = DatTables & "," & EinDeut
+    KritTab = krit
+    EinDeutWert = EinDeut
+    SortFolge = Sorto
+    KommaCount = 0
+    Dim t As Integer
+    For t = 1 To Len(DatTables)
+       If Mid(DatTables, t, 1) = "," Then KommaCount = KommaCount + 1
+    Next t
+    If KeyCode = 38 Then
+        If SuchfeldName.ListIndex = 0 Then
+        Call SuchWeiter(38, SuchfeldName)
+        End If
+    End If
+    If KeyCode = 2002 Then 'Nächste Ergebnisse sichen mit F4
+        Call SuchWeiter(40, SuchfeldName)
+    End If
+    If KeyCode = 40 Then
+        If SuchfeldName.ListIndex = SuchfeldName.ListCount - 1 And SuchfeldName.ListCount > 1 And SuchfeldName.ColumnHeads = False Then
+            Call SuchWeiter(40, SuchfeldName)
+        End If
+        If SuchfeldName.ListIndex = SuchfeldName.ListCount - 2 And SuchfeldName.ListCount > 1 And SuchfeldName.ColumnHeads = True Then
+            Call SuchWeiter(40, SuchfeldName)
+        End If
+    End If
+    If KeyCode = 2003 Then 'Vorherige Ergebnisse suchen mit F5
+        Call SuchWeiter(38, SuchfeldName)
+    End If
+    If KeyCode = 187 And Shift = 1 Then
+        Call KeyDSuch(42, SuchfeldName)
+        SuchfeldName.Dropdown
+    End If
+    SuchfeldName.AfterUpdate = "[Event Procedure]"
+
+Exit_Handler:
+    Exit Function
+    
+Err_Hanndler:
+    Resume Next
+    
+End Function
